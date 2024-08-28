@@ -1,0 +1,144 @@
+#!/usr/bin/env groovy
+
+def defaultBobImage = 'armdocker.rnd.ericsson.se/proj-adp-cicd-drop/bob.2.0:1.7.0-55'
+def bob = new BobCommand()
+        .bobImage(defaultBobImage)
+        .envVars([
+                //ARM_API_TOKEN:'${ARM_API_TOKEN}',
+                HOME           : '${HOME}',
+                CHART_NAME     : '${CHART_NAME}',
+                CHART_REPO     : '${CHART_REPO}',
+                CHART_VERSION  : '${CHART_VERSION}',
+                //GERRIT_REFSPEC:'${GERRIT_REFSPEC}',
+                RELEASE        : '${RELEASE}',
+                SITE_VALUES    : '${SITE_VALUES}',
+                HELM_REPO_TOKEN: '${HELM_REPO_TOKEN}',
+                KUBECONFIG     : '${KUBECONFIG}',
+                USER           : '${USER}',
+                //INT_CHART_NAME:'${INT_CHART_NAME},
+                //INT_CHART_REPO:'${INT_CHART_REPO},
+                //INT_CHART_VERSION:'${INT_CHART_VERSION}
+                //GERRIT_USERNAME:'${GERRIT_USERNAME}',
+                //GERRIT_PASSWORD:'${GERRIT_PASSWORD}',
+                //SELI_USER:'${SELI_USER}',
+                //SELI_PASSWORD:'${SELI_PASSWORD}',
+                //SERO_USER:'${SERO_USER}',
+                //SERO_PASSWORD:'${SERO_PASSWORD}'
+        ])
+        .needDockerSocket(true)
+        .toString()
+def LOCKABLE_RESOURCE_LABEL = "kaas-va"
+pipeline {
+    agent {
+        node {
+            label 'GE7_Docker'
+        }
+    }
+    options {
+        disableConcurrentBuilds()
+    }
+    environment {
+        INT_CHART_NAME = "eric-cbrs-dc-package"
+        INT_CHART_REPO = "https://arm.seli.gic.ericsson.se/artifactory/proj-eric-cbrs-dc-ci-internal-helm"
+        INT_CHART_VERSION = "0.3.0-30-h9528e17"
+        KUBECONFIG = "${WORKSPACE}/.kube/config"
+        SITE_VALUES = "${WORKSPACE}/k8s-test/values.yaml"
+    }
+    stages {
+        stage('Init') {
+            steps {
+                sh 'echo Init'
+            }
+        }
+        stage('K8S Resource Lock') {
+            options {
+                lock(label: LOCKABLE_RESOURCE_LABEL, variable: 'RESOURCE_NAME', quantity: 1)
+            }
+            environment {
+                // RESOURCE_NAME = hahn166_namespace2
+                K8S_CONFIG_FILE_ID = sh(script: "echo \${RESOURCE_NAME} | cut -d'_' -f1", returnStdout: true).trim()
+                // K8S_CONFIG_FILE_ID = hahn166
+            }
+            stages {
+                stage('K8S Test') {
+                    stages {
+                        stage('Helm Install') {
+                            steps {
+                                echo "Inject kubernetes config file (${env.K8S_CONFIG_FILE_ID}) based on the Lockable Resource name: ${env.RESOURCE_NAME}"
+                                configFileProvider([configFile(fileId: "${K8S_CONFIG_FILE_ID}", targetLocation: "${env.KUBECONFIG}")]) {
+                                    echo 'sh "${bob} get-charts"'
+                                    echo 'sh "${bob} helm-dry-run"'
+                                    echo 'sh "${bob} create-namespace"'
+                                    echo 'sh "${bob} helm-install-package"'
+                                    echo 'sh "${bob} healthcheck"'
+                                }
+                            }
+                            post {
+                                failure {
+                                    sh "${bob} collect-k8s-logs || true"
+                                    archiveArtifacts allowEmptyArchive: true, artifacts: 'k8s-logs/**/*.*'
+                                    sh "${bob} delete-namespace"
+                                }
+                            }
+                        }
+                        stage('K8S Test') {
+                            steps {
+                                echo 'sh "${bob} helm-test"'
+                            }
+                            post {
+                                failure {
+                                    sh "${bob} collect-k8s-logs || true"
+                                    archiveArtifacts allowEmptyArchive: true, artifacts: 'k8s-logs/**/*.*'
+                                }
+                                cleanup {
+                                    sh "${bob} delete-namespace || true"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+    }
+}
+
+// More about @Builder: http://mrhaki.blogspot.com/2014/05/groovy-goodness-use-builder-ast.html
+import groovy.transform.builder.Builder
+import groovy.transform.builder.SimpleStrategy
+
+@Builder(builderStrategy = SimpleStrategy, prefix = '')
+class BobCommand {
+
+    def bobImage = 'bob.2.0:latest'
+    def envVars = [:]
+
+    def needDockerSocket = false
+
+    String toString() {
+        def env = envVars
+                .collect({ entry -> "-e ${entry.key}=\"${entry.value}\"" })
+                .join(' ')
+
+        def cmd = """\
+            |docker run
+            |--init
+            |--rm
+            |--workdir \${PWD}
+            |--user \$(id -u):\$(id -g)
+            |-v \${PWD}:\${PWD}
+            |-v /etc/group:/etc/group:ro
+            |-v /etc/passwd:/etc/passwd:ro
+            |-v \${HOME}:\${HOME}
+            |${needDockerSocket ? '-v /var/run/docker.sock:/var/run/docker.sock' : ''}
+            |${env}
+            |\$(for group in \$(id -G); do printf ' --group-add %s' "\$group"; done)
+            |--group-add \$(stat -c '%g' /var/run/docker.sock)
+            |${bobImage}
+            |"""
+        return cmd
+                .stripMargin()           // remove indentation
+                .replace('\n', ' ')      // join lines
+                .replaceAll(/[ ]+/, ' ') // replace multiple spaces by one
+    }
+}

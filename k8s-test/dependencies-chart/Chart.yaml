@@ -1,0 +1,10 @@
+apiVersion: v2
+appVersion: "1.0"
+description: A Helm chart for CBRS DC Dependencies
+name: dependencies-chart
+version: 1.0.0-1
+dependencies:
+- condition: eric-data-document-database-pg.enabled
+  name: eric-data-document-database-pg
+  repository: https://arm.rnd.ki.sw.ericsson.se/artifactory/proj-adp-gs-all-helm/
+  version: 6.2.0+63

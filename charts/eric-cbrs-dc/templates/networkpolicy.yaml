@@ -1,0 +1,49 @@
+{{- if .Values.global.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ template "eric-cbrs-dc.name" . }}
+  annotations:
+{{- include "eric-cbrs-dc.product-info" . | indent 4 }}
+{{- include "eric-cbrs-dc.config-annotations" .| indent 4 }}
+  labels:
+    app.kubernetes.io/name: {{ include "eric-cbrs-dc.name" . }}
+    app.kubernetes.io/version: {{ include "eric-cbrs-dc.version" . }}
+    app.kubernetes.io/instance: {{ .Release.Name | quote }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "eric-cbrs-dc.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name | quote }}
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: eric-pm-server
+    ports:
+    - protocol: TCP
+      port: {{ .Values.service.metricsPort }}
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: {{ include "eric-cbrs-dc.name" . }}
+    ports:
+    - protocol: TCP
+      port: {{ .Values.service.akkaProbingPort }}
+    - protocol: TCP
+      port: {{ .Values.service.akkaManagementPort }}
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: eric-oss-ingress-controller-nx
+    ports:
+    - protocol: TCP
+      port: {{ .Values.service.ingressPort }}
+  {{- if .Values.global.developmentEnabled }}
+  - ports:
+    - port: {{ .Values.service.jbossPort }}
+  {{- end }}
+{{- end }}

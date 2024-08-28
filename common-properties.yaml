@@ -1,0 +1,15 @@
+modelVersion: 2.0
+
+properties:
+    # Microservice helm chart name
+  - helm-chart-name: eric-cbrs-dc
+    # Microservice docker image name
+  - docker-image-name: eric-cbrs-dc
+    # Microserver init docker image name
+  - init-docker-image-name: eric-cbrs-dc-init
+  # cbos version
+  - image-base-os-repo: "armdocker.rnd.ericsson.se/proj-ldc/common_base_os_release"
+  - image-base-os-version: "3.44.0-9"
+  - cbos-package-repo-url: "https://arm.rnd.ki.sw.ericsson.se/artifactory/proj-ldc-repo-rpm-local/common_base_os/sles/3.44.0-9"
+  # enm version
+  - enm-iso-repo-url: "https://ci-portal.seli.wh.rnd.internal.ericsson.com/static/staticRepos/ENM_22_04_ERICenm_CXP9027091_2_3_25"

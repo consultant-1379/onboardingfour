@@ -1,0 +1,202 @@
+## eric-cbrs-dc image version
+
+global:
+  networkPolicy:
+    enabled: true
+  pullSecret:
+  registry:
+    url: armdocker.rnd.ericsson.se
+  timezone:
+productNumber: CXC 174 2027
+productRevision: RSTATE
+
+DCM_HOST:
+
+# TODO: Fix later
+techDebt:
+  sgName: dpmediation
+  enmProperties:
+    postgres_service: eric-data-document-database-pg
+    postgresql01_admin_password:
+
+imageCredentials:
+  # repoPath include the image path relative to the registry url, excluding image name
+  mainImage:
+    repoPath: # see default in eric-product-info.yaml
+    registry: {}
+      # overrides global registry url
+      #url: armdocker.companyA.se
+  initImage:
+    repoPath: # see default in eric-product-info.yaml
+    registry: {}
+      # overrides global registry url
+      #url: armdocker.companyA.se
+  monitoringImage:
+    repoPath: # see default in eric-product-info.yaml
+    registry: {}
+      # overrides global registry url
+      #url: armdocker.companyA.se
+  # Secret must be manually created in the namespace, no default value
+  #pullSecret: eric-cbrs-dc-secret
+
+# Number of replicas(pods) to deploy
+replicaCount: 2
+
+## Pod Disruption Budget is an indicator of the number of disruptions that can be tolerated at a given time.
+podDisruptionBudget:
+  maxUnavailable: 1
+
+## Affinity for pod assignment
+affinity:
+  podAntiAffinity: "hard"
+  topologyKey: "kubernetes.io/hostname"
+
+## Tolerations for pod assignment
+tolerations: []
+
+# Extra Annotations to be added to pod
+podAnnotations: {}
+
+# Extra Annotations to be added to pod
+labels: {}
+
+## Configure the service
+service:
+  jbossPort: 8080
+  metricsPort: 9600
+  akkaManagementPort: 8558
+  akkaProbingPort: 25520
+  postgresDbPort: 5432
+  ingressPort: 8443
+  internalService:
+    type: ClusterIP
+  externalService:
+    loadBalancerIP:
+    annotations:
+      cloudProviderLB: {}
+      sharedVIPLabel:
+      addressPoolName:
+    externalIPv4:
+      enabled:
+      loadBalancerIP:
+      annotations:
+        cloudProviderLB: {}
+        sharedVIPLabel:
+        addressPoolName:
+    externalIPv6:
+      enabled:
+      loadBalancerIP:
+      annotations:
+        cloudProviderLB: {}
+        sharedVIPLabel:
+        addressPoolName:
+  endpoints:
+    restapi:
+      tls:
+        enforced: required
+
+resources:
+# TODO: Set all resources - CPU currently missing
+  maincontainer:
+    requests:
+      memory: 1786Mi
+      cpu:
+    limits:
+      memory: 4096Mi
+      cpu:
+  initcontainerService:
+    requests:
+      memory:
+      cpu:
+    limits:
+      memory:
+      cpu:
+  initcontainerSfwkdb:
+    requests:
+      memory:
+      cpu:
+    limits:
+      memory:
+      cpu:
+  monitoringcontainer:
+    requests:
+      memory:
+      cpu:
+    limits:
+      memory:
+      cpu:
+
+probes:
+  maincontainer:
+    # StartupProbe Health Check configuration.
+    startupProbe:
+      initialDelaySeconds: 10
+      timeoutSeconds: 30
+      periodSeconds: 30
+      failureThreshold: 20
+    # LivenessProbe Health Check configuration.
+    livenessProbe:
+      initialDelaySeconds: 30
+      timeoutSeconds: 30
+      periodSeconds: 30
+      failureThreshold: 2
+    # ReadinessProbe Health Check configuration.
+    readinessProbe:
+      initialDelaySeconds: 10
+      periodSeconds: 30
+      timeoutSeconds: 30
+      failureThreshold: 2
+  monitoringcontainer:
+    # StartupProbe Health Check configuration.
+    startupProbe:
+      initialDelaySeconds: 10
+      timeoutSeconds: 30
+      periodSeconds: 30
+      failureThreshold: 20
+    # LivenessProbe Health Check configuration.
+    livenessProbe:
+      initialDelaySeconds: 30
+      timeoutSeconds: 30
+      periodSeconds: 30
+      failureThreshold: 2
+    # ReadinessProbe Health Check configuration.
+    readinessProbe:
+      initialDelaySeconds: 10
+      periodSeconds: 30
+      timeoutSeconds: 30
+      failureThreshold: 1
+
+updateStrategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxUnavailable: 1
+    maxSurge: "0"
+
+ingress:
+  enabled: true
+  hostname: eric.adp.ericsson.se
+  ingressClass: OAM-IngressClass
+  tls:
+    passthrough : false
+
+topologySpreadConstraints: [ ]
+
+terminationGracePeriodSeconds: 30
+
+###################################
+# cENM values not in example chart
+###################################
+# Node selector
+nodeSelector: {}
+
+priorityClassName: ""
+
+securityContext:
+  supplementalGroups:
+    - 206
+
+##################################
+# cENM values no longer referenced
+##################################
+# Constrain which nodes your pod is eligible to be scheduled on
+nodeAffinity: {}

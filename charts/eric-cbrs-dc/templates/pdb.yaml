@@ -1,0 +1,20 @@
+apiVersion: policy/v1beta1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ template "eric-cbrs-dc.name" . }}
+  labels:
+    app.kubernetes.io/name: {{ include "eric-cbrs-dc.name" . }}
+    app.kubernetes.io/version: {{ include "eric-cbrs-dc.version" . }}
+    chart: {{ template "eric-cbrs-dc.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name | quote }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+{{- include "eric-cbrs-dc.config-labels" .| indent 4 }}
+  annotations:
+{{- include "eric-cbrs-dc.product-info" . | indent 4 }}
+{{- include "eric-cbrs-dc.config-annotations" .| indent 4 }}
+spec:
+  maxUnavailable: {{ .Values.podDisruptionBudget.maxUnavailable }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "eric-cbrs-dc.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name | quote }}

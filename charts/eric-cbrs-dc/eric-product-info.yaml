@@ -1,0 +1,25 @@
+productName: "CBRS Standalone Domain Co-Ordinator"
+productNumber: "CXD 101 173"
+images:
+  mainImage:
+    productName: "CBRS DC service Image"
+    productNumber: "CXU 101 1112"
+    registry: "armdocker.rnd.ericsson.se"
+    repoPath: "REPO_PATH"
+    name: "eric-cbrs-dc"
+    tag: "VERSION"
+  initImage:
+    productName: "CBRS DC service init Image"
+    productNumber: "CXU 101 1113"
+    registry: "armdocker.rnd.ericsson.se"
+    repoPath: "REPO_PATH"
+    name: "eric-cbrs-dc-init"
+    tag: "VERSION"
+# TODO: this image comes from cENM ... we avoid this?
+  monitoringImage:
+    productName: "cENM EAP7 Monitoring sidecar Image"
+    productNumber: "CXU Placeholder"
+    registry: "armdocker.rnd.ericsson.se"
+    repoPath: "proj-enm"
+    name: "eric-enm-monitoring-eap7"
+    tag: "1.22.0-15"

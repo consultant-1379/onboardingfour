@@ -1,0 +1,17 @@
+Kubesec:
+  Product: " " # Name of your product(this is an optional parameter now, newly added for analytics)
+  KubesecYAML:
+    Scan: True
+    SkipTests: True #Skip scanning yamls from tests folder in your chart.
+    armLinks: #Add the ARM links which doesn't require authentication here
+      Links: 
+      valuesOverride: ##If override is needed, add the values yaml names in the same order as arm links
+    armLinksWithAuth:  #Add the ARM links which require authentication here
+      Links:
+      armUser: ''  ##mandatory if links given
+      armEncryptedPwd: ''  ##mandatory if links given
+      valuesOverride: ##If override is needed, add the values yaml names in the same order as arm links, if none, mark it ''
+  KubesecCluster:
+    Scan: False
+    KubeconfigFile: "admin.conf"
+    namespace: "myapp-ns"

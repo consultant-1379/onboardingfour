@@ -1,0 +1,29 @@
+global:
+  security:
+    tls:
+      enabled: false
+
+eric-data-document-database-pg:
+  highAvailability:
+    replicaCount: 1
+  brAgent:
+    enabled: false
+  metrics:
+    enabled: false
+  persistentVolumeClaim:
+    storageClassName:
+  credentials:
+    kubernetesSecretName: doc-db-credentials
+  security:
+    postgres:
+      tls:
+        enable: false
+
+secrets:
+  doc_db_credentials:
+    custom_user: customuser
+    custom_pwd: custom_pwd
+    super_pwd: super_pwd
+    replica_user: replicauser
+    replica_pwd: replica_pwd
+    metrics_pwd: metrics_pwd

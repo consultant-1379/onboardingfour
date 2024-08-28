@@ -1,0 +1,9 @@
+if (outcome == success) of /subsystem=logging/custom-handler=SYSLOG:read-resource
+/subsystem=logging/custom-handler=SYSLOG:write-attribute(name=level,value="${JBOSS_LOG_LEVEL:INFO}")
+end-if
+
+if (outcome == success) of /subsystem=logging/root-logger=ROOT:write-attribute(name=level,value="${JBOSS_LOG_LEVEL:INFO}")
+end-if
+
+if (outcome == success) of /subsystem=logging/size-rotating-file-handler=ENM_FILE:write-attribute(name=enabled,value=true)
+end-if

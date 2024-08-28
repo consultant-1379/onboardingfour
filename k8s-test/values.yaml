@@ -1,0 +1,191 @@
+global:
+  timezone: Europe/Dublin
+
+
+tags:
+  eric-cbrs-dc-common: false
+  eric-cbrs-dc-mediation: false
+
+cmyp-brm:
+  user: brobrm
+  encryptedPass: $1$OPAHcNsn$QTzz7pVY30CXQ0Q5esdOR1
+
+uninstall:
+  image:
+    imagePullPolicy: IfNotPresent
+    repo: armdocker.rnd.ericsson.se/proj-enm
+    name: eric-enm-sles-base
+    version: 1.19.0-6
+
+eric-cbrs-dc:
+  DCM_HOST:
+  techDebt:
+    enmProperties:
+      # Encrypted password of secrets.db.super_pwd
+      postgresql01_admin_password: U2FsdGVkX19uWU+/kfu7jHGmy9BQdkr1Wz7pcHG56M8=
+  networkPolicy:
+    sasPort: 5000
+
+# Security service
+eric-ran-security-service-init:
+  enabled: true
+  secrets:
+    ldap:
+      adminuser: admin
+      adminpasswd: $6$Afe145T7$nuCGrbpT
+  env:
+    hookJob:
+      enabled: false
+
+eric-ran-security-service:
+  eric-sec-ldap-server:
+    enabled: true
+    brAgent:
+      enabled: false
+
+  eric-sec-admin-user-management:
+    enabled: true
+
+  eric-data-distributed-coordinator-ed:
+    enabled: true
+
+  eric-sec-certm:
+    enabled: true
+    features:
+      alarmHandling:
+        enabled: false
+
+  eric-sec-key-management:
+    enabled: true
+
+  eric-sec-sip-tls:
+    enabled: true
+    security:
+      policyBinding:
+        create: true
+
+eric-ran-cm-service-init:
+  enabled: true
+
+eric-ran-cm-service:
+  eric-cm-backend:
+    enabled: true
+  eric-cm-mediator:
+    enabled: true
+  eric-cm-yang-provider:
+    enabled: true
+    ldap:
+      enabled: false
+    userConfig:
+      secretName: "eric-cm-yang-provider-brm-user"
+      secretKey: "eric-cm-yang-provider-brm-user.yaml"
+  eric-data-document-database-pg:
+    enabled: true
+    credentials:
+      kubernetesSecretName: eric-ran-cm-service-init-pg-secret
+  eric-data-transformer-json:
+    enabled: true
+
+eric-data-document-database-pg:
+  highAvailability:
+    replicaCount: 1
+  brAgent:
+    enabled: false
+  metrics:
+    enabled: false
+  persistentVolumeClaim:
+    storageClassName:
+  credentials:
+    kubernetesSecretName: eric-document-db-pg-secret
+  security:
+    postgres:
+      tls:
+        enable: false
+  service:
+    endpoints:
+      postgres:
+        tls:
+          enforced: optional
+
+eric-ran-pm-service:
+  eric-ran-pm-service-init:
+    enabled: true
+  eric-pm-server:
+    enabled: true
+  eric-pm-event-exporter:
+    enabled: false
+  eric-pm-bulk-reporter:
+    enabled: false
+
+eric-ran-fm-service:
+  eric-ran-fm-service-init:
+    enabled: true
+  eric-fh-alarm-handler:
+    enabled: true
+  eric-data-document-database-pg:
+    enabled: true
+  eric-data-message-bus-kf:
+    enabled: true
+  eric-data-coordinator-zk:
+    enabled: true
+  eric-fh-snmp-alarm-provider:
+    enabled: false
+  eric-fh-event-exporter:
+    enabled: false
+
+
+eric-cnom-server:
+  features:
+    alarmViewer: false
+
+secrets:
+  db:
+    custom_user: customuser
+    custom_pwd: custom_pwd
+    super_pwd: 'P0stgreSQL11'
+    replica_user: replicauser
+    replica_pwd: replica_pwd
+    metrics_pwd: metrics_pwd
+
+eric-ran-log-service:
+  eric-data-search-engine-curator:
+    actions: |
+      1:
+        action: delete_indices
+        description: Remove logs older than 180 day
+        options:
+          disable_action: false
+          ignore_empty_list: true
+        filters:
+        - filtertype: age
+          source: name
+          direction: older
+          timestring: '%Y.%m.%d'
+          unit: days
+          unit_count: 180
+      2:
+        action: delete_indices
+        description: Remove syslog indices when accumulated indices reaches 40 GB
+        options:
+          disable_action: false
+          ignore_empty_list: true
+        filters:
+        - filtertype: pattern
+          kind: prefix
+          value: syslog-server-
+        - filtertype: space
+          disk_space: 40
+          use_age: true
+          source: creation_date
+  eric-data-search-engine:
+    autoSetRequiredWorkerNodeSysctl: true
+    brAgent:
+      cleanRestore: true
+      enabled: false
+    storage:
+      repository:
+        enabled: true
+    persistence:
+      backup:
+        persistentVolumeClaim:
+          storageClassName: nfs-cbrs16b6

@@ -1,0 +1,16 @@
+global:
+  timezone: Europe/Dublin
+
+# eric-cbrs-dc
+techDebt:
+  enmProperties:
+    postgresql01_admin_password: U2FsdGVkX19uWU+/kfu7jHGmy9BQdkr1Wz7pcHG56M8=
+
+# dependencies-chart
+eric-data-document-database-pg:
+  persistentVolumeClaim:
+    storageClassName: network-block
+
+secrets:
+  doc_db_credentials:
+    super_pwd: P0stgreSQL11

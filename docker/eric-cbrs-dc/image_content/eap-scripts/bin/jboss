@@ -1,0 +1,1213 @@
+#!/bin/sh
+#
+# chkconfig: 345 79 29
+# description: Responsible for start & stop of JBosss
+# processname: jboss
+#
+### BEGIN INIT INFO
+# Provides: jboss
+# Required-Start: $remote_fs $network $syslog
+# Required-Stop: $remote_fs $network $syslog
+# Should-Stop: sshd
+# Default-Start: 3 4 5
+# Default-Stop: 0 6
+# Short-Description: start and stop JBoss
+# Description: JBoss application server. The
+#   bedrock of ENM. The init.d script is LSB
+#   and OCF compliant.
+### END INIT INFO
+
+# Source function library.
+. /etc/init.d/functions
+
+# Load Java configuration.
+[ -r /etc/java/java.conf ] && . /etc/java/java.conf
+export JAVA_HOME
+
+# Source jboss logger methods
+. /ericsson/3pp/jboss/bin/jbosslogger
+
+command=$1
+export command
+
+_MV='/bin/mv -f'
+
+_CAT=/bin/cat
+
+_CHOWN=/bin/chown
+
+_CHMOD=/bin/chmod
+
+_MKDIR=/bin/mkdir
+
+_TOUCH=/bin/touch
+
+_RM=/bin/rm
+
+_GREP=/bin/grep
+
+_SED=/bin/sed
+
+_CP=/bin/cp
+
+_AWK=/bin/awk
+
+_TAR=/bin/tar
+
+_PS=/bin/ps
+
+_PWD=/bin/pwd
+
+WAIT_FILE=/tmp/sfs_wait
+export WAIT_FILE
+
+JVM_CACERTS_STORE=/usr/java/default/jre/lib/security/cacerts
+export JVM_CACERTS_STORE
+
+JBOSS_USER=jboss_user
+export JBOSS_USER
+
+JBOSS_GROUP=jboss
+export JBOSS_GROUP
+
+JBOSS_HOME=/ericsson/3pp/jboss
+export JBOSS_HOME
+
+JBOSS_MODULES="$JBOSS_HOME/modules/system/layers/base"
+export JBOSS_MODULES
+
+JBOSS_CONSOLE_LOG=$JBOSS_HOME/standalone/log/console.log
+export JBOSS_CONSOLE_LOG
+
+JBOSS_SERVER_LOG=$JBOSS_HOME/standalone/log/server.log
+export JBOSS_SERVER_LOG
+
+JBOSS_MESSAGING_DATA_DIRECTORY=/ericsson/jms/data
+export JBOSS_MESSAGING_DATA_DIRECTORY
+
+INITIAL_DEPLOYMENT_LOCK_FILE="$JBOSS_HOME/standalone/initial/deployments/lock"
+export INITIAL_DEPLOYMENT_LOCK_FILE;
+
+MICROHEALTHCHECK_STARTING_LOCK="/ericsson/3pp/jboss/standalone/tmp/VM_STARTING"
+export MICROHEALTHCHECK_STARTING_LOCK;
+
+MICROHEALTHCHECK_STARTED_LOCK="/ericsson/3pp/jboss/standalone/tmp/VM_STARTED"
+export MICROHEALTHCHECK_STARTED_LOCK;
+
+if [ -z "$STARTUP_WAIT" ]; then
+    STARTUP_WAIT=1800
+fi
+export STARTUP_WAIT
+
+if [ -z "$DATA_SHARE_DIR" ]; then
+    DATA_SHARE_DIR=/ericsson/tor/data
+fi
+export DATA_SHARE_DIR
+
+# Load JBoss AS init.d configuration.
+if [ -z "$JBOSS_CONF" ]; then
+    JBOSS_CONF="$JBOSS_HOME/jboss-as.conf"
+fi
+export JBOSS_CONF
+
+[ -r "$JBOSS_CONF" ] && . "${JBOSS_CONF}"
+
+export USE_DEFAULT_WELCOME_ROOT
+
+
+if [ -z "$MALLOC_ARENA_MAX" ]; then
+    MALLOC_ARENA_MAX=4
+fi
+export MALLOC_ARENA_MAX
+
+# Set defaults.
+
+if [ -z "$DEPLOYABLE_ENTITIES_DIR" ]; then
+    DEPLOYABLE_ENTITIES_DIR="/opt/ericsson"
+fi
+
+if [ -z "$SFWK_MODULES" ]; then
+   SFWK_MODULES="/opt/ericsson/jboss/modules-sfwk"
+fi
+export SFWK_MODULES
+
+if [ -z "$EXT_MODULES" ]; then
+   EXT_MODULES="/opt/ericsson/jboss/modules"
+   JBOSS_MODULEPATH="$JBOSS_HOME/modules:$EXT_MODULES:$SFWK_MODULES"
+fi
+export EXT_MODULES
+export JBOSS_MODULEPATH
+
+if [ -z "$JBOSS_PIDFILE" ]; then
+  JBOSS_PIDFILE=/var/run/jboss/jboss.pid
+fi
+export JBOSS_PIDFILE
+
+if [ -z "$JBOSS_LOCKFILE" ]; then
+  JBOSS_LOCKFILE=/var/lock/subsys/jboss
+fi
+export JBOSS_LOCKFILE
+
+if [ -z "$STOP_WAIT" ]; then
+    STOP_WAIT=30
+fi
+
+# Time wait to allow pre-stop tasks complete
+if [ -z "$PRE_STOP_WAIT" ]; then
+    PRE_STOP_WAIT=30
+fi
+export PRE_STOP_WAIT
+
+if [ -z "$LOG_WAIT" ]; then
+    LOG_WAIT=5
+fi
+
+if [ -z "$JBOSSEAP7_CONFIG" ]; then
+    JBOSSEAP7_CONFIG=standalone-eap7-enm.xml
+fi
+export JBOSSEAP7_CONFIG
+
+if [ -z "$MGT_USER" ]; then
+    MGT_USER=hqcluster
+fi
+export MGT_USER
+
+if [ -z "$MGT_PASSWORD" ]; then
+    MGT_PASSWORD=3ric550N
+fi
+export MGT_PASSWORD
+
+if [ -z "$PRE_START_WITH_EXIT_DIR" ]; then
+  PRE_START_WITH_EXIT_DIR="$JBOSS_HOME/bin/pre-start-with-exit"
+fi
+
+if [ -z "$PRE_START_DIR" ]; then
+  PRE_START_DIR="$JBOSS_HOME/bin/pre-start"
+fi
+
+if [ -z "$PRE_DEPLOY_DIR" ]; then
+    PRE_DEPLOY_DIR="$JBOSS_HOME/bin/pre-deploy"
+fi
+
+if [ -z "$PRE_STOP_DIR" ]; then
+    PRE_STOP_DIR="$JBOSS_HOME/bin/pre-stop"
+fi
+
+if [ -z "$POST_START_DIR" ]; then
+    POST_START_DIR="$JBOSS_HOME/bin/post-start"
+fi
+
+if [ -z "$POST_STOP_DIR" ]; then
+    POST_STOP_DIR="$JBOSS_HOME/bin/post-stop"
+fi
+
+if [ -z "$JBOSS_SCRIPT" ]; then
+    JBOSS_SCRIPT=$JBOSS_HOME/bin/standalone.sh
+fi
+
+if [ -z "$PIB_HOME" ]; then
+    PIB_HOME="/opt/ericsson/PlatformIntegrationBridge/etc"
+fi
+export PIB_HOME
+
+#List of DE(s) that do not participate in sdk-healthcheck or sdk-upgrade
+if [ -z "$EXCLUDED_DES" ]; then
+    EXCLUDED_DES="handler|wfs-camunda|mediation-router"
+fi
+
+if [ -z "$MODEL_DIR" ]; then
+  MODEL_DIR="/etc/opt/ericsson/ERICmodeldeployment"
+fi
+
+if [ -z "$MODEL_REPO" ]; then
+  MODEL_REPO="$MODEL_DIR/data/repo/modelrepo.xml"
+fi
+export MODEL_REPO
+
+if [ -z "$MOD_CLUSTER_PORT" ]; then
+    MOD_CLUSTER_PORT="8666"
+fi
+export MOD_CLUSTER_PORT
+
+if [ -z "$ROOTCACERT_FILE" ]; then
+    ROOTCACERT_FILE="$DATA_SHARE_DIR/certificates/rootCA.pem"
+fi
+export ROOTCACERT_FILE
+
+if [ -z "$MODEL_DIR" ]; then
+  MODEL_DIR="/etc/opt/ericsson/ERICmodeldeployment"
+fi
+
+if [ -z "$MODEL_REPO" ]; then
+  MODEL_REPO="$MODEL_DIR/data/repo/modelrepo.xml"
+fi
+
+# Returns second digit from the java version
+JAVA_VER=$(java -version 2>&1 | grep -i version | sed 's/.*version ".*\.\(.*\)\..*"/\1/; 1q')
+export JAVA_VER
+
+# Use MAX_META_SPACE for java version above 1.7 and PERM_GEN for 1.7
+if [ "$JAVA_VER" -gt 7 ]; then
+
+   if [ -z "$MAX_META_SPACE" ]; then
+      if [ -n "$PERM_GEN" ]; then
+            MAX_META_SPACE=$PERM_GEN
+      else
+           MAX_META_SPACE=512
+      fi
+   fi
+   export MAX_META_SPACE
+
+   if [ -z "$INITIAL_META_SPACE" ]; then
+        INITIAL_META_SPACE=$(($MAX_META_SPACE/2))
+   fi
+   export INITIAL_META_SPACE
+
+
+
+else
+
+   if [ -z "$PERM_GEN" ]; then
+      PERM_GEN=512
+   fi
+   export PERM_GEN
+
+fi
+
+SHUTDOWN_NOTIF_SCRIPT="$JBOSS_HOME/bin/pre-stop/shutdown_notification.py"
+
+EXTRA_CONFIG=$(cd $(dirname $0) ; $_PWD)/local.conf
+[[ -f "${EXTRA_CONFIG}" ]] && . ${EXTRA_CONFIG}
+
+if [ -z ${ENVIRONMENT_TYPE+x} ]; then
+    ENVIRONMENT_TYPE="PRODUCTION"
+fi
+export ENVIRONMENT_TYPE
+
+prog='jboss-as'
+
+CMD_PREFIX=''
+
+if [ ! -z "$JBOSS_USER" ]; then
+  if [ -r /etc/rc.d/init.d/functions ]; then
+    CMD_PREFIX="daemon --user $JBOSS_USER"
+  else
+    CMD_PREFIX="su - $JBOSS_USER -c"
+  fi
+fi
+
+if [ -z "$STANDALONE_CONF" ]; then
+      STANDALONE_CONF="$JBOSS_HOME/bin/standalone.conf"
+fi
+
+
+[ -r "$STANDALONE_CONF" ] && . "${STANDALONE_CONF}"
+
+
+export JB_MANAGEMENT
+export JB_INTERNAL
+export JB_PUBLIC
+export THIS_HOST
+export DEFAULT_IP
+export DEFAULT_IF
+export DEFAULT_MEM
+
+if [ -z "$PIB_ADDRESS" ]; then
+    PIB_ADDRESS="$JB_INTERNAL:8080"
+fi
+export PIB_ADDRESS
+
+ENM_DUMPS_DIR="/ericsson/enm/dumps"
+export ENM_DUMPS_DIR
+
+TIMEOUT_FLAG=false
+
+#######################################
+# Action :
+#   __set_jboss_transactions_identifier :
+# Globals:
+#   JB_INTERNAL
+#   ADDTIONAL_JAVA_OPTS
+# Arguments:
+# Returns:
+#
+#######################################
+__set_jboss_transactions_identifier () {
+  JBOSS_TRANSACTION_ID=$(/bin/sed 's/\./_/g' <<< $JB_INTERNAL)
+  export JBOSS_TRANSACTION_ID
+  JAVA_OPTS="$JAVA_OPTS -Djboss.transaction.id=${JBOSS_TRANSACTION_ID}"
+}
+
+#######################################
+# Action :
+#   __preStart
+#   Performs any configuration needed
+#   before starting the JBoss AS.
+# Globals:
+#   PRE_START_DIR
+#   PRE_START_WITH_EXIT_DIR
+#   JBOSS_HOME
+#   JBOSS_USER
+#   JBOSS_GROUP
+#   EXT_MODULES
+#   SFWK_MODULES
+# Arguments:
+#   None
+# Returns:
+#
+#######################################
+__preStart() {
+
+  if [ -d ${DEPLOYABLE_ENTITIES_DIR} ];
+  then
+    #Find any EAR/WAR/RAR in deployments directory and copy to deployments folder
+    info "EAR/WAR/RAR available before copying to deployments folder"
+    _listDEs "$DEPLOYABLE_ENTITIES_DIR"
+    find ${DEPLOYABLE_ENTITIES_DIR} -type f -regex ".*[\.[erw]ar" -exec cp {} ${JBOSS_HOME}/standalone/deployments/ \;
+  fi
+
+  #Delete any file that is not an EAR/WAR/RAR in the deployment directory
+  find $JBOSS_HOME/standalone/deployments -type f -not -regex ".*[\.[erw]ar" -delete
+
+  if [ -f "$INITIAL_DEPLOYMENT_LOCK_FILE" ]; then
+      $_RM -f "$INITIAL_DEPLOYMENT_LOCK_FILE"
+  fi
+
+  __set_jboss_transactions_identifier
+
+  info "Run pre-start-with-exit scripts"
+  __run_scripts_in_directory_with_exit_status "$PRE_START_WITH_EXIT_DIR"
+
+  retCode=$?
+  if [ "$retCode" -ne 0 ]; then
+      warn "$prog failed to start, failed during pre start with exit script execution"
+      return 1
+  fi
+
+    info "Run pre-start scripts"
+  __run_scripts_in_directory $PRE_START_DIR false
+
+
+  if [ "$ENVIRONMENT_TYPE" == "PRODUCTION" ]; then
+
+    ADDTIONAL_JAVA_OPTS=$("$JBOSS_HOME/bin/configure_production_env.sh")
+    if [ -z "$ADDTIONAL_JAVA_OPTS" ]; then
+        warn "$prog failed to start, failed to configure production environment."
+        return 1
+    else
+        JAVA_OPTS="$JAVA_OPTS $ADDTIONAL_JAVA_OPTS"
+    fi
+  fi
+
+  # change ownership on all DE's
+  $_CHOWN -R :root $JBOSS_HOME || true
+
+  # change permissions on all DE's so we can overwrite DE with ejb-client.xml
+  [[ "$(whoami)" == "root" ]] && find $JBOSS_HOME \( ! -name README -a ! -perm 775 \) -exec chmod 775 {} \;
+
+  # Now we have full list of JAVA_OPTS
+  # export for use in standalone.sh
+  export JAVA_OPTS
+
+  # Dont want to start deployment of DE(s) until all subsystems in JBoss are started
+    find $JBOSS_HOME/standalone/deployments -type f -regex ".*[\.[erw]ar" -exec mv {} ${JBOSS_HOME}/standalone/tmp/deployments/ \;
+    info "EAR/WAR/RAR available in temporary deployments folder"
+    _listDEs "$JBOSS_HOME/standalone/tmp/deployments"
+ }
+
+#######################################
+# Action :
+#   __preDeploy
+#   Performs any configuration needed
+#   after the JBoss AS is started, but
+#   before deploying any DE.
+# Globals:
+#   PRE_DEPLOY_DIR
+# Arguments:
+#   None
+# Returns:
+#
+#######################################
+__preDeploy() {
+
+  info "Run pre-deploy scripts"
+  __run_scripts_in_directory_with_exit_status $PRE_DEPLOY_DIR
+  return $?
+
+}
+
+#######################################
+# Action :
+#   __checkJBossServerRunning :
+# Checks whether JBoss is running and ready to take deployments or not
+# Returns:
+#         0 if jboss is in running state
+#         1 if jboss process is running but not yet in running state
+#         2 if jboss-as doesn't respond other than timeout issues
+#         28 if jboss-as doesn't respond in time
+#
+#######################################
+__checkJBossServerRunning() {
+  TIMEOUT_FLAG=false
+  START_TIME=$(($(date +%s%N)/1000000))
+  SERVER_STATE=$(curl -m 16 -s --digest -L -D - http://$JB_MANAGEMENT:9990/management --header "Content-Type: application/json" -d '{"operation":"read-attribute","name":"server-state","json.pretty":1}'  -u $MGT_USER:$MGT_PASSWORD )
+  SERVER_STATE_EXIT_CODE=$?
+  END_TIME=$(($(date +%s%N)/1000000))
+  TIMEDIFF=$(($END_TIME - $START_TIME))
+  info "Jboss CURL command took $TIMEDIFF milliseconds"
+
+
+  if [ $SERVER_STATE_EXIT_CODE == 0 ]
+    then
+    echo $SERVER_STATE| grep "\"result\" : \"running\"" >> /dev/null
+      if [ $? == 0 ] ; then
+         return 0
+      else
+         info "jboss-as is starting: $SERVER_STATE"
+         return 1
+      fi
+    elif [ $SERVER_STATE_EXIT_CODE == 28 ] ; then
+      _takeJbossThreadDump
+      # not all the VMs has JBoss gc.log enabled, we only dump the GC if the log exists
+      if ls /ericsson/3pp/jboss/standalone/log/server-gc.log.* > /dev/null 2>&1; then
+          _takeJbossGcDump
+      fi
+      TIMEOUT_FLAG=true
+      info "jboss-as status check code : $SERVER_STATE_EXIT_CODE"
+      return 28
+    else
+      info "jboss-as status check code : $SERVER_STATE_EXIT_CODE"
+      return 2
+    fi
+
+}
+
+
+#######################################
+# Action :
+#   start
+#   Starts the JBoss AS
+# Globals:
+#   JBOSS_PIDFILE
+#   JBOSS_CONSOLE_LOG
+#   JBOSS_SERVER_LOG
+#   JBOSS_USER
+#   LAUNCH_JBOSS_IN_BACKGROUND
+#   JBOSS_SCRIPT
+#   JBOSS_CONSOLE_LOG
+#   STARTUP_WAIT
+#   POST_START_DIR
+#   JBOSS_LOCKFILE
+# Arguments:
+#   None
+# Returns:
+#   0 Resource started or already running
+#   1 Resource failed to start
+#######################################
+start() {
+
+  info "Starting $prog: "
+  if [ -f $JBOSS_PIDFILE ]; then
+    read ppid < $JBOSS_PIDFILE
+    if [ `ps --pid $ppid 2> /dev/null | grep -c $ppid 2> /dev/null` -eq '1' ]; then
+      info "$prog is already running"
+      $_RM -f $WAIT_FILE
+      success
+      echo
+      return 0
+    else
+      rm -f $JBOSS_PIDFILE
+    fi
+  fi
+
+  # Don't run __preStart if jboss already running.
+  __preStart
+  retCode=$?
+  if [ $retCode -ne 0 ]; then
+      $_RM -f $WAIT_FILE
+      failure
+      echo
+      return 1
+  fi
+
+  $_MKDIR -p $(dirname $JBOSS_CONSOLE_LOG)
+  $_CAT /dev/null > $JBOSS_CONSOLE_LOG
+
+
+  $_MKDIR -pm 775 $(dirname $JBOSS_PIDFILE)
+  $_CHOWN $JBOSS_USER $(dirname $JBOSS_PIDFILE) || true
+
+  if [ ! -f $JBOSS_SERVER_LOG ]; then
+    $_MKDIR -p $(dirname $JBOSS_SERVER_LOG)
+    $_CHOWN $JBOSS_USER $(dirname $JBOSS_SERVER_LOG) || true
+  fi
+
+  if [ -f $JBOSS_LOCKFILE ]; then
+    warn "$prog failed to start, lock file exists"
+        $_RM -f $WAIT_FILE
+    failure
+    echo
+    return 1
+  fi
+
+  info "Executing standalone.sh script "
+  userRetCode=$("$JBOSS_HOME/bin/standalone.sh")
+  userRetCode=$?
+    if [ $userRetCode -ne 0 ]; then
+      error "Failed to execute standalone.sh, return code = $userRetcode"
+  fi
+
+  count=0
+  started=false
+  while [ $count -le $STARTUP_WAIT ]
+  do
+        __checkJBossServerRunning
+        if [ $? == 0 ]
+        then
+            JBOSS_PID=$($_PS -ef | $_GREP Standalone | $_GREP -v grep | $_AWK '{print $2}')
+            if [ "x$JBOSS_PID" != "x" ]; then
+                echo $JBOSS_PID > $JBOSS_PIDFILE
+            else
+                warning "Not able to get the Jboss pid"
+            fi
+
+            __preDeploy
+            if [ $? -ne 0 ]; then
+                $_RM -f $WAIT_FILE
+                failure
+                echo
+                return 1
+            fi
+
+            #Check for files if present in initial/deployments
+            numberDEinitial=$(find ${JBOSS_HOME}/standalone/initial/deployments -type f -iname '*.[e|w|r]ar' | wc -l)
+            if [ $numberDEinitial -ne 0 ]; then
+               #Add lock on initial/deployments
+               $_CAT /dev/null > "$INITIAL_DEPLOYMENT_LOCK_FILE"
+               #Move files from initial/deployments to deployments so that they get deployed first
+               find $JBOSS_HOME/standalone/initial/deployments -type f -regex ".*[\.[erw]ar" -exec mv {} ${JBOSS_HOME}/standalone/deployments/ \;
+                  info "listing DEs to be deployed"
+                  _listDEs "$JBOSS_HOME/standalone/deployments"
+               #Check for deployed status
+               until [ $count -gt $STARTUP_WAIT ]
+               do
+                 status 2> /dev/null
+                 if [ $? -eq 0 ] ; then
+                   deployed=true
+                   break
+                 fi
+                 sleep 1
+                 let count=$count+1;
+               done
+
+               if [ "$deployed" = "false" ] ; then
+                 warn "$prog failed to startup in the time allotted"
+                 failure
+                 echo
+                 return 1
+               fi
+            fi
+
+            #Now that JBoss is running move back the DE(s) the deployment scanner will pick them up and deploy.
+            find $JBOSS_HOME/standalone/tmp/deployments -type f -regex ".*[\.[erw]ar" -exec mv -u {} ${JBOSS_HOME}/standalone/deployments/ \;
+            info "EAR/WAR/RAR available in deployments folder"
+            _listDEs "$JBOSS_HOME/standalone/deployments"
+            started=true
+            break
+        fi
+        sleep 1
+        let count=$count+1;
+  done
+
+  #Remove lock on initial/deployments
+  if [ -f $INITIAL_DEPLOYMENT_LOCK_FILE ]; then
+     $_RM -f $INITIAL_DEPLOYMENT_LOCK_FILE
+  fi
+
+  let count=$count+10;
+  sleep 10
+  # Workaround till we get all jboss starts removed from service group rpms delivered to iso.
+  $_RM -f $WAIT_FILE
+  if [ "$started" == "false" ] ; then
+    warn "$prog failed to start"
+    failure
+    echo
+    return 1
+  fi
+  until [ $count -gt $STARTUP_WAIT ]
+  do
+    status 2> /dev/null
+    if [ $? -eq 0 ] ; then
+      launched=true
+      break
+    fi
+    sleep 1
+    let count=$count+1;
+  done
+
+  if [ "$launched" = "false" ] ; then
+    warn "$prog failed to startup in the time allotted"
+    failure
+    echo
+    return 1
+  fi
+
+  monitor
+  if [ $? -ne 0 ] ; then
+    error "$prog failed to start successfully."
+    failure
+    echo
+    return 1
+  fi
+
+
+  # Only create lock file upon successfull start of JBoss
+  $_CAT /dev/null > "$JBOSS_LOCKFILE"
+
+  info "Run post-start scripts"
+  __run_scripts_in_directory $POST_START_DIR true
+  info "post-start scripts complete. JBOSS start complete."
+
+  success
+  echo
+  return 0
+}
+
+#######################################
+# Action :
+#   __run_scripts_in_directory
+#   Run all scripts in specified
+#   directory
+# Globals:
+#   None
+# Arguments:
+#   1 - Absolute path to the directory
+#   containing scripts to be run.
+#   2 - Run as background process, true/false
+# Returns:
+#
+#######################################
+__run_scripts_in_directory() {
+    for SCRIPT in $1/*
+        do
+            if [ -f "$SCRIPT" -a -x "$SCRIPT" ]
+            then
+                if [ "$2" = true ] ; then
+                    info "JBoss execute script as background process : $SCRIPT"
+                    $SCRIPT > /dev/null 2>&1 &
+                else
+                    info "JBoss execute script : $SCRIPT"
+                    $SCRIPT > /dev/null 2>&1
+                fi
+            fi
+        done
+}
+
+#######################################
+# Action :
+#   __run_scripts_in_directory_with_exit_status
+#   Run all scripts in specified
+#   directory. Return 1 in case of
+#   any script failure.
+# Globals:
+#   None
+# Arguments:
+#   1 - Absolute path to the directory
+#   containing scripts to be run.
+# Returns:
+#   0 - if all scripts in the directory are
+#   successfully executed
+#   1 - in case of any script failure
+#######################################
+__run_scripts_in_directory_with_exit_status() {
+    for SCRIPT in $1/*
+    do
+        if [ -f "$SCRIPT" -a -x "$SCRIPT" ]
+        then
+            info "JBoss execute script : $SCRIPT"
+            $SCRIPT > /dev/null 2>&1
+            if [ $? -ne 0 ]; then
+                error "Script failing : $SCRIPT"
+                return 1
+            fi
+        fi
+    done
+    return 0
+}
+
+#######################################
+# Action :
+#   __run_scripts_in_directory_specified_script_at_last
+#   Run all scripts in specified directory and specified
+#   one is executed at last.
+# Globals:
+#   None
+# Arguments:
+#   1 - Absolute path to the directory
+#   containing scripts to be run.
+#   2 - Run as background process, true/false
+#   3 - The script to be executed at last
+# Returns:
+#
+#######################################
+__run_scripts_in_directory_specified_script_at_last() {
+    for SCRIPT in $1/*
+        do
+            if [ "$SCRIPT" == "$3" ]; then
+                continue
+            fi
+
+            if [ -f "$SCRIPT" -a -x "$SCRIPT" ]
+            then
+                if [ "$2" = true ] ; then
+                    info "JBoss execute script as background process : $SCRIPT"
+                    $SCRIPT > /dev/null 2>&1 &
+                else
+                    info "JBoss execute script : $SCRIPT"
+                    $SCRIPT > /dev/null 2>&1
+                fi
+            fi
+        done
+
+    if [ -f "$3" ]; then
+        info "JBoss execute script : $3"
+        $3 > /dev/null 2>&1
+    fi
+
+}
+
+#######################################
+# Action :
+#   stop
+#   Issue shutdown notification to all
+#   services running in the VM before
+#   stopping JBoss.
+# Globals:
+#   MGT_USER
+#   MGT_PASSWORD
+#   JB_MGT
+# Arguments:
+#   None
+# Returns:
+#
+#######################################
+stop() {
+
+    info $"Stopping $prog: "
+    count=0;
+
+    if [ -f $JBOSS_PIDFILE ]; then
+
+        __findServiceIDS
+
+        info "Run pre-stop scripts"
+        __run_scripts_in_directory_specified_script_at_last "$PRE_STOP_DIR" false "$SHUTDOWN_NOTIF_SCRIPT"
+
+        read kpid < $JBOSS_PIDFILE
+        let kwait=$STOP_WAIT
+
+        # Try issuing SIGTERM
+        kill -15 "$kpid"
+        until [ `ps --pid $kpid 2> /dev/null | grep -c $kpid 2> /dev/null` -eq '0' ] || [ $count -gt $kwait ]
+        do
+          sleep 1
+          let count=$count+1;
+        done
+
+        if [ $count -gt $kwait ]; then
+        kill -9 "$kpid"
+        fi
+    fi
+
+    rm -f $JBOSS_PIDFILE
+
+    if [ -f $JBOSS_LOCKFILE ]; then
+            $_RM -f $JBOSS_LOCKFILE
+    fi
+
+    if [ -f $INITIAL_DEPLOYMENT_LOCK_FILE ]; then
+            $_RM -f $INITIAL_DEPLOYMENT_LOCK_FILE
+    fi
+
+    if [ -f "$WAIT_FILE" ]; then
+        $_RM -f $WAIT_FILE
+    fi
+
+    if [ -f $MICROHEALTHCHECK_STARTING_LOCK ]; then
+        $_RM -f $MICROHEALTHCHECK_STARTING_LOCK
+    fi
+
+    if [ -f $MICROHEALTHCHECK_STARTED_LOCK ]; then
+        $_RM -f $MICROHEALTHCHECK_STARTED_LOCK
+    fi
+
+    info "Run post-stop scripts"
+    __run_scripts_in_directory $POST_STOP_DIR true
+
+    success
+    echo
+}
+
+
+
+#######################################
+# Action :
+#   __findServiceIDS
+# Globals:
+#   EXCLUDED_DES
+# Arguments:
+#   None
+# Returns:
+#   Exports white space separated, list of
+#   service identifiers to issue shutdown
+#   notifications to.
+#######################################
+__findServiceIDS() {
+    SERVICE_ID_LIST=$(find $JBOSS_HOME/standalone/deployments -type f -not -path "*no_sdk_checks*" -regex ".*[\.[ew]ar" | grep -oP "([^/]*(?=(-ear|-war)))" | egrep -iv $EXCLUDED_DES)
+    export SERVICE_ID_LIST
+}
+
+
+#######################################
+# Action :
+#   status
+# Globals:
+#   MGT_USER
+#   MGT_PASSWORD
+#   JB_MANAGEMENT
+#   JBOSS_PIDFILE
+#   JBOSS_LOCKFILE
+# Arguments:
+#   None
+# Returns:
+#   0 Resource is started, DE(s) deployed
+#   1 Resource is in failed state, pid file exists
+#   2 Resource is in failed state, lock file exists
+#   3 Resource is stopped or starting because of jboss-as is not responding other than time out or failure reasons
+#######################################
+status() {
+
+  __checkStarting
+  rc=$?
+  if [ $rc -ne 0 ] ; then
+    return $rc
+  fi
+  #read JB_MANAGEMENT again just in case global.properties not accessible
+  if [ -z "$JB_MANAGEMENT" ]; then
+    read ppid < $JBOSS_PIDFILE
+    JB_MANAGEMENT=$($_PS -f --pid $ppid 2> /dev/null | $_GREP $ppid 2> /dev/null | $_SED -e 's/.*jboss.bind.address.management=\(\S*\).*/\1/g' 2> /dev/null)
+  fi
+   __checkJBossServerRunning
+  checkjbossrc=$?
+  if [ "$checkjbossrc" -eq 0 ]; then
+    echo "$prog is running"
+    return 0
+  elif [ "$checkjbossrc" -eq 28 ]; then
+      warn "jboss-as healthcheck curl command timed out, check threaddump at ${ENM_DUMPS_DIR}/thread_dump_${HOSTNAME}.tar.gz"
+      return 1
+  else
+    _check_file "$JBOSS_PIDFILE"
+    pidfilerc=$?
+    if [ "$pidfilerc" -eq 0 ]; then
+      read ppid < $JBOSS_PIDFILE
+      if [ `ps --pid $ppid 2> /dev/null | grep -c $ppid 2> /dev/null` -eq '0' ]; then
+        error "$prog dead but pid file exists"
+        return 1
+      else
+        echo "$prog is running"
+        return 0
+      fi
+    else
+      _check_file "$JBOSS_LOCKFILE"
+      lockfilerc=$?
+      if [ "$lockfilerc" -eq 0 ]; then
+        error "$prog dead but lock file exists"
+        return 2
+      fi
+    fi
+  fi
+    error "$prog is not running"
+    return 1
+}
+#######################################
+# Action :
+#   _check_file
+#   Checks and wait 2sec for file on SFS
+# Arguments:
+#   FileName
+# Returns:
+#  0 if file reachable
+#  1 if file not reachable and timeout
+#######################################
+
+_check_file(){
+    timeout 2 ls "$1" > /dev/null 2>&1
+    filelsrc=$?
+    if [ "$filelsrc" -eq 0 ]; then
+      return 0
+    else
+      return 1
+    fi
+}
+#######################################
+# Action :
+#   check JBoss is starting
+# Globals:
+#   JBOSS_HOME
+#   JBOSS_PIDFILE
+#   STARTUP_WAIT
+# Arguments:
+#   None
+# Returns:
+#   0 started
+#   1 failed
+#   3 stopped or still starting
+#######################################
+__checkStarting() {
+
+numberDE=$(find $JBOSS_HOME/standalone/deployments -type f -iname '*.[e|w|r]ar' | wc -l)
+
+#file name will end in either .deployed or .failed
+numberDeployed=$(find $JBOSS_HOME/standalone/deployments -type f -iname '*.*ed' | wc -l)
+
+if [ "$numberDE" -eq "$numberDeployed" ] ; then
+    if [ "$numberDE" -eq 0 ]; then
+    warn "No DEs available to be deployed."
+    info "$prog Still starting"
+        return 3
+    fi
+    return 0
+fi
+_check_file "$JBOSS_PIDFILE"
+pidfile2rc=$?
+if [ "$pidfile2rc" -eq 0 ]; then
+    read ppid < "$JBOSS_PIDFILE"
+    startTime=$(date -d "$(ps -p "$ppid" -o lstart | awk '{if(NR>1)print}')" '+%s')
+    let uptime=$(date '+%s')-${startTime}
+    if [ "${uptime}" -gt "$STARTUP_WAIT" ] ; then
+        error "$prog Startup time has elapsed and all DE(s) still not deployed so failed"
+        return 1
+   else
+      info "$prog Still starting"
+      return 3
+  fi
+else
+  error "$prog is not running"
+fi
+}
+
+#######################################
+# Action :
+#   monitor
+# Globals:
+#   MGT_USER
+#   MGT_PASSWORD
+#   JB_MGT
+# Arguments:
+#   None
+# Returns:
+#   0 Resource is running
+#   1 Resource is in failed state
+#   7 Resource is stopped or still starting
+#######################################
+monitor() {
+
+ _check_file "$INITIAL_DEPLOYMENT_LOCK_FILE"
+    lockrc=$?
+    if [ "$lockrc" -eq 0 ]; then
+      info "Initial deployment lock exists"
+      return 1
+    fi
+
+ status
+ statusrc=$?
+ if [ $statusrc -eq 1 ] ; then
+    return 1
+ elif [ $statusrc -eq 2 ] ; then
+    return 7
+ elif [ $statusrc -eq 3 ] ; then
+    return 7
+ fi
+#read JB_MANAGEMENT again just in case golbal.properties not accessible
+ if [ -z "$JB_MANAGEMENT" ]; then
+    read ppid < "$JBOSS_PIDFILE"
+    JB_MANAGEMENT=$($_PS -f --pid $ppid 2> /dev/null | $_GREP $ppid 2> /dev/null | $_SED -e 's/.*jboss.bind.address.management=\(\S*\).*/\1/g' 2> /dev/null)
+fi
+# If status check has passed then Management interface is up and all DE(s) are deployed.
+START_TIME=$(($(date +%s%N)/1000000))
+output=$(curl -m 16 --digest -L -D - http://$JB_MANAGEMENT:9990/management --header 'Content-Type: application/json' -d '{"operation":"read-attribute","address":[{"deployment":"*"}],"name":"status","json.pretty":1}' -u $MGT_USER:$MGT_PASSWORD)
+outputrc=$?
+END_TIME=$(($(date +%s%N)/1000000))
+TIMEDIFF=$(($END_TIME - $START_TIME))
+info "Monitor CURL command took $TIMEDIFF milliseconds"
+if [ "$outputrc" -eq 28 ]; then
+      warn "jboss-as healthcheck curl command timed out, check thread_dumps or gc_dumps (if enabled) at ${ENM_DUMPS_DIR}"
+      if [ "$TIMEOUT_FLAG" = false ] ; then
+          _takeJbossThreadDump
+          # not all the VMs has JBoss gc.log enabled, we only dump the GC if the log exists
+          if ls /ericsson/3pp/jboss/standalone/log/server-gc.log.* > /dev/null 2>&1; then
+              _takeJbossGcDump
+          fi
+      fi
+      return 1
+fi
+
+# Need to ensure we have all DE(s) in state OK not FAILED or STOPPED
+failed=$(echo "$output" | egrep "FAILED|STOPPED" | wc -l)
+
+if [ "$failed" -gt 0 ] ; then
+  error "Found DE in FAILED/STOPPED state on $THIS_HOST"
+  error "$output"
+  echo "$prog has failed/stopped services"
+  return 1
+fi
+
+totalDEs=$(find $JBOSS_HOME/standalone/deployments -type f -iname '*.[e|w|r]ar' | wc -l)
+failed_undeployed_DEs=$(find $JBOSS_HOME/standalone/deployments \( -type f -iname '*.failed' -o -iname '*.undeployed' \))
+failed_undeployed_DEs_COUNT=`echo $failed_undeployed_DEs | wc -w`
+
+if [ "$failed_undeployed_DEs_COUNT" -gt 0 ]; then
+    # Need to log this as info in ES
+    info "All Failed Undeployed DE list: $failed_undeployed_DEs"
+    if [ "$totalDEs" -eq "$failed_undeployed_DEs_COUNT" ]; then
+        error "All DEs in failed/undeployed state on $THIS_HOST"
+    else
+        if [ $failed_undeployed_DEs_COUNT -eq 1 ]; then
+            error "Found DE in failed/undeployed state on $THIS_HOST"
+        fi
+    fi
+    return 1
+fi
+
+return 0
+
+}
+
+metadata_jboss()
+{
+    $_CAT <<END
+<?xml version="1.0"?>
+<!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
+
+<resource-agent name="jboss">
+<version>1.0</version>
+
+<longdesc lang="en">
+Resource script for Jboss. It manages a Jboss instance as an HA resource.
+</longdesc>
+<shortdesc lang="en">Manages a JBoss application server instance</shortdesc>
+
+</resource-agent>
+END
+    return 0
+}
+
+#Takes a thread dump of the jboss process and then logs the threaddump to
+#/ericsson/enm/dumps/threadDumps in a compressed file
+_takeJbossThreadDump()
+{
+    localLogDirectory="${JBOSS_HOME}/standalone/log"
+    localThreadDumpDirectory="${localLogDirectory}/threadDumps"
+    threadDumpTarFile="thread_dump_${HOSTNAME}.tar.gz"
+    currentDirectory=$($_PWD)
+
+    #Creating threadDumps directory, if exists cleaning up
+    if [ ! -d $localThreadDumpDirectory ]; then
+        $_MKDIR -p $localThreadDumpDirectory
+    else
+        $_RM -rf $localThreadDumpDirectory/*
+    fi
+    cd ${localLogDirectory}
+    #Copy existing thread dumps if exists in shared location
+    if [ -f $ENM_DUMPS_DIR/$threadDumpTarFile ]; then
+        $_MV $ENM_DUMPS_DIR/$threadDumpTarFile $localLogDirectory/
+        $_TAR -xf $threadDumpTarFile
+        $_RM -f $threadDumpTarFile
+    fi
+
+    #Take a thread dump of the jboss jvm
+    THREAD_DUMP_FILE="${localThreadDumpDirectory}/thread_dump_`$_DATE +%Y-%m-%d_%H-%M-%S`.dump"
+    info "Collecting thread dump to $THREAD_DUMP_FILE"
+    PID_NO=$($_AWK '{print $1}' "$JBOSS_PIDFILE")
+    $_JCMD $PID_NO Thread.print > "$THREAD_DUMP_FILE" 2>&1
+    $_TAR -cf $threadDumpTarFile "threadDumps/"
+    $_MV $threadDumpTarFile $ENM_DUMPS_DIR/
+    cd $currentDirectory
+}
+
+#######################################
+# Action :
+#     copies the JBoss garbage collection log (server-gc.log*) to the below shared storage
+#     /ericsson/enm/dumps
+# Globals:
+#    HOSTNAME
+# Arguments:
+#   None
+# Returns:
+#   None
+#######################################
+_takeJbossGcDump()
+{
+    localGcDir="${JBOSS_HOME}/standalone/log"
+    localGcDumpDir="${localGcDir}/gcDumps"
+    gcDumpTarFile="gc_dump_${HOSTNAME}.tar.gz"
+    currentDirectory=$($_PWD)
+    # check if gc log available
+    # #Creating gcDumps directory, if exists cleaning up
+    if [[ ! -d $localGcDumpDir ]]; then
+        $_MKDIR -p $localGcDumpDir
+    else
+        $_RM -rf $localGcDumpDir/*
+    fi
+
+    cd ${localGcDir}
+    #Copy existing gc dumps if exists in shared location
+    if [ -f $ENM_DUMPS_DIR/$gcDumpTarFile ]; then
+        $_MV $ENM_DUMPS_DIR/$gcDumpTarFile $localGcDir/
+        $_TAR -xf $gcDumpTarFile
+        $_RM -f $gcDumpTarFile
+    fi
+
+    info "Timeout exceeded. Sending GC logs to ${ENM_DUMPS_DIR}/${gcDumpTarFile}"
+    GC_DUMP_FILE="gc_`$_DATE +%Y-%m-%d_%H-%M-%S`.tar"
+    $_TAR -cf ${localGcDumpDir}/${GC_DUMP_FILE} server-gc.log*
+
+    $_TAR -cf $gcDumpTarFile "gcDumps/"
+    $_MV $gcDumpTarFile $ENM_DUMPS_DIR/
+    cd $currentDirectory
+}
+
+# Lists all EAR/WAR/RAR DEs in the specified directory
+_listDEs(){
+  DIR=$1
+  info "$(find $DIR -type f -regex ".*[\.[erw]ar" -exec ls {} \;)"
+}
+
+
+case "$1" in
+  start|initialize)
+      start
+      ;;
+  stop)
+      stop
+      ;;
+  restart)
+      $0 stop
+      sleep 10
+      $0 start
+      ;;
+  status)
+      status
+      ;;
+  monitor)
+    monitor
+      ;;
+  meta-data)
+    metadata_jboss
+      ;;
+  *)
+      ## If no parameters are given, print which are available.
+      echo "Usage: $0 {start|stop|status|restart|monitor|meta-data}"
+      exit 1
+      ;;
+esac

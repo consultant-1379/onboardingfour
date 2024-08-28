@@ -1,0 +1,30 @@
+{{- if .Values.global -}}
+  {{- if .Values.global.security -}}
+    {{- if .Values.global.security.policyBinding -}}
+      {{- if .Values.global.security.policyBinding.create -}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+ name: {{ template "eric-cbrs-dc.name" . }}-security-policy
+ labels:
+    app.kubernetes.io/name: {{ include "eric-cbrs-dc.name" . }}
+    app.kubernetes.io/version: {{ include "eric-cbrs-dc.version" . }}
+    chart: {{ template "eric-cbrs-dc.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name | quote }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+{{- include "eric-cbrs-dc.config-labels" .| indent 4 }}
+ annotations:
+{{- include "eric-cbrs-dc.securityPolicy.annotations" . | indent 4 }}
+{{- include "eric-cbrs-dc.product-info" . | indent 4 }}
+{{- include "eric-cbrs-dc.config-annotations" .| indent 4 }}
+roleRef:
+ apiGroup: rbac.authorization.k8s.io
+ kind: ClusterRole
+ name: {{ include "eric-cbrs-dc.securityPolicy.reference" . }}
+subjects:
+ - kind: ServiceAccount
+   name: {{ template "eric-cbrs-dc.name" . }}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}

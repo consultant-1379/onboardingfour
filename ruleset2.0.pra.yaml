@@ -1,0 +1,140 @@
+modelVersion: 2.0
+
+docker-images:
+  - adp-release-auto: armdocker.rnd.ericsson.se/proj-adp-cicd-drop/bob-adp-release-auto:latest
+
+import:
+  common: common-properties.yaml
+
+properties:
+    # Original helm chart repository
+  - helm-chart-repo: https://arm.seli.gic.ericsson.se/artifactory/proj-eric-cbrs-dc-drop-helm
+    # Microservice released helm chart repository
+  - helm-chart-released-repo: https://arm.seli.gic.ericsson.se/artifactory/proj-eric-cbrs-dc-released-helm
+    # The root path in docker registry where images to be released are stored
+  - image-drop-repopath: proj-eric-cbrs-dc-drop
+  - docker-registry-root: armdocker.rnd.ericsson.se/${image-drop-repopath}
+    # Temporary folder where the released version of the helm chart is generated
+  - helm-chart-released-folder: 'build/released-charts'
+    # Docker image name with path
+  - image-full-name: ${docker-registry-root}/${common.docker-image-name}
+  - init-image-full-name: ${docker-registry-root}/${common.init-docker-image-name}
+    # Release candidate image name
+  - docker-image-name: ${common.docker-image-name}:${env.RELEASE_CANDIDATE}
+  - init-docker-image-name: ${common.init-docker-image-name}:${env.RELEASE_CANDIDATE}
+    # Released docker ARM repo
+  - docker-image-release-repo: proj-eric-cbrs-dc-released
+    # Microservice released docker images
+  - docker-released-image: armdocker.rnd.ericsson.se/${docker-image-release-repo}/${docker-image-name}
+  - init-docker-released-image: armdocker.rnd.ericsson.se/${docker-image-release-repo}/${init-docker-image-name}
+
+env:
+  - HOME
+    # the microservice release candidate version (e.g. 1.0.0-3)
+  - RELEASE_CANDIDATE
+    # the ARM functional user name for Helm repository
+  - HELM_USER
+    # the ARM functional user token for Helm repository
+  - HELM_REPO_TOKEN
+  - GERRIT_USERNAME
+  - GERRIT_PASSWORD
+  - DOCKER_CONFIG (default=${env.HOME}/.docker/config.json)
+
+var:
+  - released-version
+  - helmchart-file-name
+
+rules:
+  # The rule cleans artifacts-properties and docker images from the docker-images-released-folder
+  clean:
+    - task: tmp
+      cmd: rm -rf .bob/ build/
+    - task: artifact-properties
+      cmd: rm -f artifact.properties
+
+  # Generates the released version based on environment variable RELEASE_CANDIDATE
+  # Generates adp artifacts properties
+  init:
+    - task: generate-released-version
+      cmd: echo ${env.RELEASE_CANDIDATE} | sed s/-/+/ > .bob/var.released-version
+    - task: helmchart-file-name
+      cmd: echo ${common.helm-chart-name}-${var.released-version}.tgz > .bob/var.helmchart-file-name
+    - task: adp-artifacts-properties
+      docker-image: adp-release-auto
+      cmd: generate-adp-artifacts
+           --chart-name ${common.helm-chart-name}
+           --chart-version ${var.released-version}
+           --chart-repo ${helm-chart-released-repo}
+
+  # This rule will pull docker image from DROP repo
+  # and push docker image to proj-eric-cbrs-dc-released-docker-image
+  publish-released-docker-image:
+    - task: image-pull
+      cmd: docker pull ${image-full-name}:${env.RELEASE_CANDIDATE}
+    - task: init-image-pull
+      cmd: docker pull ${init-image-full-name}:${env.RELEASE_CANDIDATE}
+    - task: image-tag-released
+      cmd: docker tag ${image-full-name}:${env.RELEASE_CANDIDATE} ${docker-released-image}
+    - task: init-image-tag-released
+      cmd: docker tag ${init-image-full-name}:${env.RELEASE_CANDIDATE} ${init-docker-released-image}
+    - task: release-docker-image
+      cmd: docker push ${docker-released-image}
+    - task: release-init-docker-image
+      cmd: docker push ${init-docker-released-image}
+
+  # This rule will generate the released helm chart
+  generate-release-chart:
+    - task: generate-release-chart
+      docker-image: adp-release-auto
+      docker-flags:
+        - --env HELM_USER
+        - --env HELM_TOKEN=${env.HELM_REPO_TOKEN}
+      cmd:
+        - mkdir -p ${helm-chart-released-folder}
+        - generate_release_helm_package
+            --repo ${helm-chart-repo}
+            --chart-name ${common.helm-chart-name}
+            --chart-version ${env.RELEASE_CANDIDATE}
+            --output ${helm-chart-released-folder}
+            --chart-released-version ${var.released-version}
+            --helm-user ${env.HELM_USER}
+            --arm-api-token ${env.HELM_REPO_TOKEN}
+            --replace ${image-drop-repopath}=${docker-image-release-repo}
+
+  # The rule uploads the released helm chart
+  publish-released-helm-chart:
+    - task: release-helm-package
+      docker-image: adp-release-auto
+      docker-flags:
+        - --env HELM_USER
+        - --env HELM_TOKEN=${env.HELM_REPO_TOKEN}
+      cmd: upload_helm_package
+           --chart-filename="${helm-chart-released-folder}/${common.helm-chart-name}-${var.released-version}.tgz"
+           --chart-repo=${helm-chart-released-repo}
+           --helm-user ${env.HELM_USER}
+           --helm-token ${env.HELM_REPO_TOKEN}
+           --virtual-repo=${helm-chart-released-repo}
+
+  # Create and push git tag. Example v1.0.0+55
+  create-pra-git-tag:
+    - task: git-tag
+      docker-image: adp-release-auto
+      docker-flags:
+        - "--env GERRIT_USERNAME"
+        - "--env GERRIT_PASSWORD"
+      cmd: version-handler create-git-tag
+           --tag ${var.released-version}
+           --message "PRA Release ${var.released-version}"
+           --git-repo-path .
+
+  # Incremenet the version prefix
+  increment-version-prefix:
+    - task: git-push-version-prefix-increment
+      docker-image: adp-release-auto
+      docker-flags:
+        - "--env GERRIT_USERNAME"
+        - "--env GERRIT_PASSWORD"
+      cmd: version-handler increment
+           --step-version-prefix "MINOR"
+           --git-repo-path .
+           --branch master

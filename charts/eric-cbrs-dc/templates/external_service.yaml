@@ -1,0 +1,89 @@
+{{/*
+IPfamily supported deployment (singlestack of choice or dualstack)
+Service options under service.external are used
+Service names has suffix of IPfamily
+ */}}
+{{ if or ( eq (include "eric-cbrs-dc.ext-service.enabled-IPv4" .) "true" ) (eq (include "eric-cbrs-dc.ext-service.enabled-IPv6" .) "true" ) }}
+{{- if eq (include "eric-cbrs-dc.ext-service.enabled-IPv4" .) "true" -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ template "eric-cbrs-dc.ext-service.name" . }}
+  labels:
+    app.kubernetes.io/name: {{ include "eric-cbrs-dc.name" . }}
+    app.kubernetes.io/version: {{ include "eric-cbrs-dc.version" . }}
+    chart: {{ template "eric-cbrs-dc.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name | quote }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+{{- include "eric-cbrs-dc.config-labels" .| indent 4 }}
+  annotations:
+{{- include "eric-cbrs-dc.product-info" . | indent 4 }}
+{{- include "eric-cbrs-dc.config-annotations" .| indent 4 }}
+{{- include "eric-cbrs-dc.ext-service.annotations-ipv4" . | indent 4 }}
+{{- include "eric-cbrs-dc.cloudProviderLB.annotations-IPv4" . | indent 4 }}
+spec:
+  ipFamilies: ["IPv4"]
+{{- template "eric-cbrs-dc.ext-service.selector" . }}
+{{- template "eric-cbrs-dc.ext-service.ports" . }}
+  type: LoadBalancer-ipv4
+{{- if .Values.service.externalService.externalIPv4.loadBalancerIP }}
+  loadBalancerIP: {{ .Values.service.externalService.externalIPv4.loadBalancerIP }}
+{{- end }}
+{{- end }}
+---
+{{ if eq (include "eric-cbrs-dc.ext-service.enabled-IPv6" .) "true" -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ template "eric-cbrs-dc.ext-service.name" . }}
+  labels:
+    app.kubernetes.io/name: {{ include "eric-cbrs-dc.name" . }}
+    app.kubernetes.io/version: {{ include "eric-cbrs-dc.version" . }}
+    chart: {{ template "eric-cbrs-dc.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name | quote }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+{{- include "eric-cbrs-dc.config-labels" .| indent 4 }}
+  annotations:
+{{- include "eric-cbrs-dc.product-info" . | indent 4 }}
+{{- include "eric-cbrs-dc.config-annotations" .| indent 4 }}
+{{- include "eric-cbrs-dc.ext-service.annotations-ipv6" . | indent 4 }}
+{{- include "eric-cbrs-dc.cloudProviderLB.annotations-IPv6" . | indent 4 }}
+spec:
+  ipFamilies: ["IPv6"]
+{{- template "eric-cbrs-dc.ext-service.selector" . }}
+{{- template "eric-cbrs-dc.ext-service.ports" . }}
+  type: LoadBalancer-ipv6
+{{- if .Values.service.externalService.externalIPv6.loadBalancerIP }}
+  loadBalancerIP: {{ .Values.service.externalService.externalIPv6.loadBalancerIP }}
+{{- end }}
+{{- end }}
+{{/*
+Legacy deployment with single service
+Legacy service options are used
+Service name has no ipFamily suffix
+ */}}
+{{ else }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ template "eric-cbrs-dc.ext-service.name" . }}
+  labels:
+    app.kubernetes.io/name: {{ include "eric-cbrs-dc.name" . }}
+    app.kubernetes.io/version: {{ include "eric-cbrs-dc.version" . }}
+    chart: {{ template "eric-cbrs-dc.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name | quote }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+{{- include "eric-cbrs-dc.config-labels" .| indent 4 }}
+  annotations:
+{{- include "eric-cbrs-dc.product-info" . | indent 4 }}
+{{- include "eric-cbrs-dc.config-annotations" .| indent 4 }}
+{{- include "eric-cbrs-dc.ext-service.annotations" . | indent 4 }}
+{{- include "eric-cbrs-dc.cloudProviderLB.annotations" . | indent 4 }}
+spec:
+{{- template "eric-cbrs-dc.ext-service.selector" . }}
+{{- template "eric-cbrs-dc.ext-service.ports" . }}
+  type: LoadBalancer
+{{- if .Values.service.externalService.loadBalancerIP }}
+  loadBalancerIP: {{ .Values.service.externalService.loadBalancerIP }}
+{{- end }}
+{{- end }}
